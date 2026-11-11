@@ -2,6 +2,7 @@ import streamlit as st
 import fitz
 from PIL import Image
 from invoice_ai import extract_invoice_data
+from invoice_validator import validate_invoice
 
 from invoice_extractor import (
     extract_pdf_text,
@@ -15,16 +16,22 @@ st.set_page_config(
 )
 
 st.title("AI Invoice Processing System")
-st.write("Upload your invoice for AI-powered data extraction.")
+st.write("Upload your invoice for AI-powered data extraction and validation.")
 
 uploaded_file = st.file_uploader(
     "Upload an invoice",
     type=["pdf", "png", "jpg", "jpeg"]
 )
 
-# Initialize session state for extracted text/data if not present
+# Initialize session state variables if not present
 if "extracted_raw_text" not in st.session_state:
     st.session_state.extracted_raw_text = ""
+
+if "invoice_data" not in st.session_state:
+    st.session_state.invoice_data = None
+
+if "validation_result" not in st.session_state:
+    st.session_state.validation_result = None
 
 if uploaded_file is not None:
 
@@ -90,6 +97,33 @@ if uploaded_file is not None:
             with st.spinner("AI is extracting structured invoice data..."):
                 invoice_data = extract_invoice_data(st.session_state.extracted_raw_text)
 
-            st.subheader("Extracted Invoice Data")
-            st.json(invoice_data)
-            st.session_state["invoice_data"] = invoice_data
+            st.session_state.invoice_data = invoice_data
+            
+            # Run validation once data is extracted
+            validation_result = validate_invoice(invoice_data)
+            st.session_state.validation_result = validation_result
+
+# ---------------------------------
+# STEP 3: DISPLAY RESULTS & VALIDATION
+# ---------------------------------
+if st.session_state.invoice_data is not None:
+    st.divider()
+    st.subheader("Extracted Invoice Data")
+    st.json(st.session_state.invoice_data)
+
+if st.session_state.validation_result is not None:
+    st.divider()
+    st.subheader("Invoice Validation")
+
+    validation_result = st.session_state.validation_result
+
+    if validation_result.get("is_valid", False):
+        st.success("Invoice passed basic validation.")
+    else:
+        st.error("Invoice has validation errors.")
+
+    for error in validation_result.get("errors", []):
+        st.write("❌", error)
+
+    for warning in validation_result.get("warnings", []):
+        st.warning(warning)
